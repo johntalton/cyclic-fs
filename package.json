@@ -1,0 +1,18 @@
+{
+  "name": "@johntalton/cyclic-fs",
+  "version": "1.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "files": [
+    "./src/**/*.js"
+  ],
+  "scripts": {
+    "test": "node --test",
+    "coverage": "c8 -r lcov -r text node --test"
+  },
+  "devDependencies": {
+    "c8": "^10.1.3"
+  }
+}
