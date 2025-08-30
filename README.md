@@ -45,19 +45,19 @@ const eeprom = /* ... */
 const byteSize = (32 * 1024 / 8) /* eeprom length - 32K-bits */
 
 // format first
-await CyclicFS.format(eeprom, byteSize, metadata)
-// initialize metadata token
-const metadata = await CyclicFS.init(eeprom, byteSize, { stride: 8 })
+await CyclicFS.format(eeprom, byteSize, handle)
+// initialize handle token
+const handle = await CyclicFS.init(eeprom, byteSize, { stride: 8 })
 
 // write data into FS
-await CyclicFS.write(eeprom, metadata, Uint8Array.from([ 1, 2, 3, 4 ]))
-await CyclicFS.write(eeprom, metadata, Uint8Array.from([ 5, 6, 7, 8 ]))
+await CyclicFS.write(eeprom, handle, Uint8Array.from([ 1, 2, 3, 4 ]))
+await CyclicFS.write(eeprom, handle, Uint8Array.from([ 5, 6, 7, 8 ]))
 // ... etc
 // last
-await CyclicFS.write(eeprom, metadata, Uint8Array.from([ 42, 77, 00, 37 ]))
+await CyclicFS.write(eeprom, handle, Uint8Array.from([ 42, 77, 00, 37 ]))
 
 // read (the one and only) latest buffer
-const ab = await CyclicFS.read(eeprom, metadata) // [ 42, 77, 00, 37 ]
+const ab = await CyclicFS.read(eeprom, handle) // [ 42, 77, 00, 37 ]
 ```
 
 # Options
@@ -98,21 +98,71 @@ await CyclicFS.format(eeprom, halfSize, partition1Options)
 await CyclicFS.format(eeprom, halfSize, partition2Options)
 
 // initialize the two partitions
-const metadataP1 = await CyclicFS.init(eeprom, halfSize, partition1Options)
-const metadataP2 = await CyclicFS.init(eeprom, halfSize, partition2Options)
+const handleP1 = await CyclicFS.init(eeprom, halfSize, partition1Options)
+const handleP2 = await CyclicFS.init(eeprom, halfSize, partition2Options)
 
 // write a bunch of data to each
-await CyclicFS.write(eeprom, metadataP1, /* ... */)
-await CyclicFS.write(eeprom, metadataP1, /* ... */)
-await CyclicFS.write(eeprom, metadataP1, /* ... */)
+await CyclicFS.write(eeprom, handleP1, /* ... */)
+await CyclicFS.write(eeprom, handleP1, /* ... */)
+await CyclicFS.write(eeprom, handleP1, /* ... */)
 // ...
-await CyclicFS.write(eeprom, metadataP2, /* ... */) // write to partition 2
+await CyclicFS.write(eeprom, handleP2, /* ... */) // write to partition 2
 // ...
-await CyclicFS.write(eeprom, metadataP1, /* ... */)
-await CyclicFS.write(eeprom, metadataP1, /* ... */)
+await CyclicFS.write(eeprom, handleP1, /* ... */)
+await CyclicFS.write(eeprom, handleP1, /* ... */)
 
 // read the two independent values
-const p1LatestValue = await CycleFS.read(eeprom, metadataP1)
-const p2LatestValue = await CycleFS.read(eeprom, metadataP2)
+const p1LatestValue = await CycleFS.read(eeprom, handleP1)
+const p2LatestValue = await CycleFS.read(eeprom, handleP2)
 
+```
+
+# Example (listing)
+
+## In descending order
+```javascript
+cost handle = /* see above init() */
+
+// ... add data
+
+// iterate over slots in use starting with current
+for await (const { version, data } of CyclicFS.list(eeprom, handle)) {
+  console.log(version, data)
+}
+
+```
+
+## All slots in memory ordering
+```javascript
+const handle = /* see above init() */
+
+// returns all slots (even unused ones)
+for await (const slot of CyclicFS.listSlots(eeprom, handle)) {
+  const { version, data } = slot
+
+  // assuming formatted with standard values
+  if(version === HEADER_INIT_VALUE32) {
+    // empty slot
+  }
+  else {
+    // ... slit in-use
+  }
+}
+```
+
+The iteration of slots also can be used without a handle to inspect the FS (unlike `list` call which requires a handle), allowing to inspect potential devices at location or strides that may not be valid.
+
+By bypassing the `init` call, the devices is not scanned to determine the current value
+
+```javascript
+// your custom inspection configuration
+const options = {
+  baseAddress: /* some custom value */
+  littleEndian: /* some custom value */
+  byteLength: /* some custom value */
+  stride: /* some custom value */
+}
+for await (const slot of CyclicFS.listSlots(eeprom, options)) {
+  // ...
+}
 ```

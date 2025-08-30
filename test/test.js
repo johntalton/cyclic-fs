@@ -6,6 +6,7 @@ import {
 	DEFAULT_BASE_ADDRESS,
 	DEFAULT_LITTLE_ENDIAN,
 	DEFAULT_STRIDE,
+	HEADER_INIT_VALUE32,
 	HEADER_SIZE
 } from '@johntalton/cyclic-fs'
 
@@ -239,8 +240,6 @@ describe('CyclicFS', () => {
 
 			const newHandle = await CyclicFS.init(mock, mock.byteLength, { fullScan: true, stride: 8 })
 
-			console.log('BUFFER', mock.u8)
-
 			assert.equal(newHandle.baseAddress, 0)
 			assert.equal(newHandle.byteLength, mock.byteLength)
 			assert.equal(newHandle.empty, false)
@@ -419,6 +418,83 @@ describe('CyclicFS', () => {
 				new Uint8Array(buffer)
 			assert.equal(buffer8[0], source[0])
 			assert.equal(buffer8[3], source[3])
+		})
+	})
+
+	describe('listSlots', () => {
+		it('should list empty', async () => {
+			const mock = new MockEEPROM()
+			await CyclicFS.format(mock, mock.byteLength)
+			const handle = await CyclicFS.init(mock, mock.byteLength - 8, { baseAddress: 8, stride: 8 })
+
+			const iter = CyclicFS.listSlots(mock, handle)
+			const ary = await Array.fromAsync(iter)
+
+			assert.equal(ary.length, 7)
+
+			const [ first ] = ary
+
+			assert.equal(first.version, HEADER_INIT_VALUE32)
+		})
+	})
+
+	describe('list', () => {
+		it('should list empty', async () => {
+			const mock = new MockEEPROM()
+			await CyclicFS.format(mock, mock.byteLength)
+			const handle = await CyclicFS.init(mock, mock.byteLength - 8, { baseAddress: 8, stride: 8 })
+
+			const iter = CyclicFS.list(mock, handle)
+			const first = await iter.next()
+			assert.ok(first.done)
+		})
+
+		it('should list files descending', async () => {
+			const mock = new MockEEPROM()
+			await CyclicFS.format(mock, mock.byteLength)
+			const handle = await CyclicFS.init(mock, mock.byteLength, { stride: 8 })
+
+			await CyclicFS.write(mock, handle, Uint32Array.from([ 42 ]))
+			await CyclicFS.write(mock, handle, Uint32Array.from([ 37 ]))
+
+			assert.equal(handle.offset, 8)
+			assert.equal(handle.version, 1)
+
+			const iter = CyclicFS.list(mock, handle)
+			const ary = await Array.fromAsync(iter)
+			assert.equal(ary.length, 2)
+
+			assert.equal(ary[0].version, 1)
+			assert.equal(ary[1].version, 0)
+
+		})
+
+		it('should list files when wrapped', async () => {
+			const mock = new MockEEPROM()
+			await CyclicFS.format(mock, mock.byteLength)
+			const handle = await CyclicFS.init(mock, mock.byteLength, { stride: 16 })
+
+			const slotCount = mock.byteLength / handle.stride
+			assert.equal(slotCount, 4)
+
+			await CyclicFS.write(mock, handle, Uint32Array.from([ 42 ]))
+			await CyclicFS.write(mock, handle, Uint32Array.from([ 37 ]))
+			await CyclicFS.write(mock, handle, Uint32Array.from([ 77 ]))
+			await CyclicFS.write(mock, handle, Uint32Array.from([ 99 ]))
+			await CyclicFS.write(mock, handle, Uint32Array.from([ 69 ]))
+			await CyclicFS.write(mock, handle, Uint32Array.from([ 0 ]))
+
+			assert.equal(handle.offset, 16)
+			assert.equal(handle.version, 5)
+
+			const iter = CyclicFS.list(mock, handle)
+			const ary = await Array.fromAsync(iter)
+			assert.equal(ary.length, 4)
+
+			assert.equal(ary[0].version, 5)
+			assert.equal(ary[1].version, 4)
+			assert.equal(ary[2].version, 3)
+			assert.equal(ary[3].version, 2)
 		})
 	})
 })

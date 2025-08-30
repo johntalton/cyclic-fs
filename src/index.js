@@ -8,7 +8,11 @@ export const HEADER_SIZE = 4
 export const HEADER_INIT_VALUE8 = 0xFF
 export const HEADER_INIT_VALUE32 = 0xFF_FF_FF_FF
 
-//
+/**
+ * @param {number} start
+ * @param {number} end
+ * @param {number} [step = 1]
+ */
 export function* range(start, end, step = 1) {
 	for(let i = start; i <= end; i += step) {
 		yield i
@@ -22,6 +26,12 @@ export function* range(start, end, step = 1) {
 
 /**
  * @typedef {number} Version
+ */
+
+/**
+ * @typedef {Object} Slot
+ * @property {Version} version
+ * @property {BufferSource} data
  */
 
 /**
@@ -45,6 +55,11 @@ export function* range(start, end, step = 1) {
  */
 
 /**
+ * @typedef {VersionOptions & ConfigOptions} ListOptions
+ *
+ */
+
+/**
  * @typedef {Object} SearchOptionsBase
  * @property {boolean} [fullScan = DEFAULT_FULL_SCAN]
  */
@@ -55,7 +70,7 @@ export function* range(start, end, step = 1) {
 
 /**
  * @typedef {Object} SearchResult
- * @property {number} version
+ * @property {Version} version
  * @property {number} offset
  * @property {boolean} empty
  */
@@ -104,26 +119,46 @@ export class CyclicFS {
 
 	/**
 	 * @param {EEPROM} eeprom
-	 * @param {Metadata} metadata
-	 * @returns {Promise<BufferSource|undefined>}
+	 * @param {number} offset
+	 * @param {VersionOptions & ConfigOptions} options
+	 * @returns {Promise<Slot>}
 	 */
-	static async read(eeprom, metadata) {
-		const { baseAddress, version, offset, stride, littleEndian, empty } = metadata
-		if(empty) { return undefined }
+	static async #readSlot(eeprom, offset, options) {
+		const { baseAddress, littleEndian, stride } = options
 
 		const block = await eeprom.read(baseAddress + offset, stride)
+
 		const headerDV = ArrayBuffer.isView(block) ?
 			new DataView(block.buffer, block.byteOffset, HEADER_SIZE) :
 			new DataView(block, 0, HEADER_SIZE)
 
-		const currentVersion = headerDV.getUint32(0, littleEndian)
-		if(currentVersion !== version) { throw new Error('version miss-match') }
+		const version = headerDV.getUint32(0, littleEndian)
 
 		const blockU8 = ArrayBuffer.isView(block) ?
 			new Uint8Array(block.buffer, block.byteOffset, block.byteLength) :
 			new Uint8Array(block)
 
-		return blockU8.subarray(HEADER_SIZE)
+		const data = blockU8.subarray(HEADER_SIZE)
+
+		return {
+			version,
+			data
+		}
+	}
+
+	/**
+	 * @param {EEPROM} eeprom
+	 * @param {Metadata} metadata
+	 * @returns {Promise<BufferSource|undefined>}
+	 */
+	static async read(eeprom, metadata) {
+		const { version, offset, empty } = metadata
+		if(empty) { return undefined }
+
+		const { version: slotVersion, data } = await CyclicFS.#readSlot(eeprom, offset, metadata)
+		if(slotVersion !== version) { throw new Error('version miss-match') }
+
+		return data
 	}
 
 	/**
@@ -249,5 +284,36 @@ export class CyclicFS {
 
 		const slotCount = Math.floor(byteLength / stride)
 		return _search(0, slotCount - 1, value)
+	}
+
+
+	/**
+	 * @param {EEPROM} eeprom
+	 * @param {ListOptions} options
+	 * @returns {AsyncGenerator<Slot>}
+	 */
+	static async *listSlots(eeprom, options) {
+		const { byteLength, stride } = options
+
+		for(const offset of range(0, byteLength - 1, stride)) {
+			yield CyclicFS.#readSlot(eeprom, offset, options)
+		}
+	}
+
+	/**
+	 * @param {EEPROM} eeprom
+	 * @param {Metadata} metadata
+	 * @returns {AsyncGenerator<Slot>}
+	 */
+	static async *list(eeprom, metadata) {
+		const { byteLength, stride, offset, empty } = metadata
+		if(empty) { return }
+
+		for(const relativeOffset of range(0, byteLength - 1, stride)) {
+			const actualOffset = (offset - relativeOffset + byteLength) % byteLength
+			const slot = await CyclicFS.#readSlot(eeprom, actualOffset, metadata)
+			if(slot.version === HEADER_INIT_VALUE32) { break }
+			yield slot
+		}
 	}
 }
