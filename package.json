@@ -1,6 +1,7 @@
 {
   "name": "@johntalton/cyclic-fs",
-  "version": "1.0.1",
+  "version": "1.0.2",
+  "license": "MIT",
   "type": "module",
   "exports": {
     ".": "./src/index.js"
@@ -14,5 +15,8 @@
   },
   "devDependencies": {
     "c8": "^10.1.3"
+  },
+  "repository": {
+    "url": "https://github.com/johntalton/cyclic-fs"
   }
 }

@@ -8,8 +8,7 @@ This has the benefit of ware-leveling the device in a predictable way.
 
 [![npm Version](http://img.shields.io/npm/v/@johntalton/cyclic-fs.svg)](https://www.npmjs.com/package/@johntalton/cyclic-fs)
 ![GitHub package.json version](https://img.shields.io/github/package-json/v/johntalton/cyclic-fs)
-![CI](https://github.com/johntalton/cyclic-fs/workflows/CI/badge.svg)
-![GitHub](https://img.shields.io/github/license/johntalton/cyclic-fs)
+[![CI](https://github.com/johntalton/cyclic-fs/actions/workflows/CI.yml/badge.svg)](https://github.com/johntalton/cyclic-fs/actions/workflows/CI.yml)
 
 
 # Concept
